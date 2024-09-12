@@ -1,55 +1,99 @@
 import { useState, useEffect } from "react";
-import ContactForm from "./components/ContactForm/ContactForm";
-import SearchBox from "./components/SearchBox/SearchBox";
-import ContactList from "./components/ContactList/ContactList";
-import contacts from "./contacts.json"
+import ErrorMessage from "./components/ErrorMessage/ErrorMessage";
+import ImageModal from "./components/ImageModal/ImageModal";
+import ImageGallery from "./components/ImageGallery/ImageGallery";
+import Loader from "./components/Loader/Loader";
+import LoadMoreBtn from './components/LoadMoreBtn/LoadMoreBtn';
+import SearchBar from "./components/SearchBar/SearchBar";
+
+import { Toaster } from 'react-hot-toast';
+
+import fetchGalleryPhotos from './unsplash-api';
 
 
 export const App = () => {
-  const [users, setUsers] = useState(() => {
-    const localStorageContacts = JSON.parse(localStorage.getItem("contacts"));
-    if (localStorageContacts ) {
-      return [...localStorageContacts ];
-    }
-    return [...contacts];
-  })
-  // const [filtered, setFiltered] = useState([])
-  const [filter, setFilter] = useState('')
-  const handelChangeFilter = (event) => {
-    setFilter(event.target.value.toLowerCase());
-  }
-    useEffect(() => {
-    localStorage.setItem("contacts", JSON.stringify(users));
-    }, [users])
-  const filtered = users.filter((itm) => {
+  const [page, setPage] = useState(1);
+	const [queryValue, setQueryValue] = useState('');
+	const [gallery, setGallery] = useState([]);
+	const [isLoading, setIsLoading] = useState(false);
+	const [isError, setIsError] = useState(false);
+	const [totalPages, setTotalPages] = useState(0);
 
-    return itm.name.toLowerCase().includes(filter) });
-  // useEffect(() => {
-  //   if (!filter) {
-  //     setFiltered(users);
-  //   } else {
-  //     let filtered = users.filter((itm) => {
-  //       return itm.name.toLowerCase().includes(filter);
-  //     });
-  //     setFiltered([...filtered]);
-  //   }
-  // }, [filter, users]);
-  const addContact = (newContact) => {
-    setUsers((u)=>[...u, newContact]
-    )
+	const [modalIsOpen, setIsOpen] = useState(false);
+	const [modalImage, setModalImage] = useState('');
+	const [altDescription, setAltDescription] = useState('');
+
+	function openModal() {
+		setIsOpen(true);
   }
-  const handleDeleteContact = (id) => {
-		setUsers((u) =>
-			u.filter((itm) => itm.id !== id)
-		);
+  function closeModal() {
+		setIsOpen(false);
 	}
-  return (
-  <div>
-  <h1>Phonebook</h1>
-      <ContactForm add={addContact} />
-      <SearchBox filter={filter} changeFilterHandler={handelChangeFilter} />
-      <ContactList contacts={filtered} onDelete={handleDeleteContact}/>
-</div>
 
+	function updateModalStateData(src, alt) {
+		setModalImage(src);
+		setAltDescription(alt);
+	}
+
+	useEffect(() => {
+		if (queryValue === '') return;
+
+		const handleSearch = async () => {
+			try {
+				setIsLoading(true);
+				setIsError(false);
+				const data = await fetchGalleryPhotos(queryValue, page);
+				console.log('data: ', data);
+				if (data.total === 0) return;
+				setGallery((prevGallery) => {
+					return [...prevGallery, ...data.results];
+				});
+				setTotalPages(data.total_pages);
+      } catch (error) {
+        console.log(error);
+        
+				setIsError(true);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+		handleSearch();
+	}, [page, queryValue]);
+
+	const handleQuery = (newQuery) => {
+		setQueryValue(newQuery);
+		setGallery([]);
+		setPage(1);
+	};
+
+	const handleLoadMore = () => {
+		setPage((prevPage)=> prevPage + 1);
+	};
+
+	const isActive = page === totalPages;
+
+  return (
+  <>
+			<SearchBar onSubmit={handleQuery} />
+			{gallery.length > 0 && (
+				<ImageGallery
+					gallery={gallery}
+					openModal={openModal}
+					updateModalStateData={updateModalStateData}
+				/>
+			)}
+			{isLoading && <Loader />}
+			{isError && <ErrorMessage />}
+			{gallery.length > 0 && !isLoading && !isError && (
+				<LoadMoreBtn handleLoadMore={handleLoadMore} isActive={isActive} />
+			)}
+			<ImageModal
+				modalIsOpen={modalIsOpen}
+				closeModal={closeModal}
+				src={modalImage}
+				alt={altDescription}
+			/>
+			<Toaster position='top-right' reverseOrder={true} />
+		</>
 )
 };
